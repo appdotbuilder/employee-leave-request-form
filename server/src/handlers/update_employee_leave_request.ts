@@ -1,22 +1,67 @@
+import { db } from '../db';
+import { employeeLeaveRequestsTable } from '../db/schema';
 import { type UpdateEmployeeLeaveRequestInput, type EmployeeLeaveRequest } from '../schema';
+import { eq } from 'drizzle-orm';
 
-export async function updateEmployeeLeaveRequest(input: UpdateEmployeeLeaveRequestInput): Promise<EmployeeLeaveRequest> {
-    // This is a placeholder declaration! Real code should be implemented here.
-    // The goal of this handler is updating an existing employee leave request in the database.
-    // It should also update the updated_at timestamp.
-    
-    return Promise.resolve({
-        id: input.id,
-        id_share: `ELR-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`, // Placeholder
-        employee_name: input.employee_name || 'Placeholder Name',
-        department_grade: input.department_grade || 'G8',
-        status: input.status || 'Pending',
-        leave_date: input.leave_date || new Date(),
-        location: input.location || 'Mambal',
-        reason: input.reason || 'Placeholder reason',
-        time_out: input.time_out || '09:00',
-        time_back: input.time_back || '17:00',
-        created_at: new Date(),
-        updated_at: new Date()
-    } as EmployeeLeaveRequest);
-}
+export const updateEmployeeLeaveRequest = async (input: UpdateEmployeeLeaveRequestInput): Promise<EmployeeLeaveRequest> => {
+  try {
+    // Check if the record exists
+    const existingRecord = await db.select()
+      .from(employeeLeaveRequestsTable)
+      .where(eq(employeeLeaveRequestsTable.id, input.id))
+      .execute();
+
+    if (existingRecord.length === 0) {
+      throw new Error(`Employee leave request with ID ${input.id} not found`);
+    }
+
+    // Build update object with only provided fields
+    const updateData: Partial<typeof employeeLeaveRequestsTable.$inferInsert> = {
+      updated_at: new Date() // Always update the timestamp
+    };
+
+    if (input.employee_name !== undefined) {
+      updateData.employee_name = input.employee_name;
+    }
+    if (input.department_grade !== undefined) {
+      updateData.department_grade = input.department_grade;
+    }
+    if (input.status !== undefined) {
+      updateData.status = input.status;
+    }
+    if (input.leave_date !== undefined) {
+      updateData.leave_date = input.leave_date.toISOString().split('T')[0]; // Convert to YYYY-MM-DD format
+    }
+    if (input.location !== undefined) {
+      updateData.location = input.location;
+    }
+    if (input.reason !== undefined) {
+      updateData.reason = input.reason;
+    }
+    if (input.time_out !== undefined) {
+      updateData.time_out = input.time_out;
+    }
+    if (input.time_back !== undefined) {
+      updateData.time_back = input.time_back;
+    }
+
+    // Update the record
+    const result = await db.update(employeeLeaveRequestsTable)
+      .set(updateData)
+      .where(eq(employeeLeaveRequestsTable.id, input.id))
+      .returning()
+      .execute();
+
+    // Convert date strings back to Date objects to match schema
+    const updatedRecord = result[0];
+    return {
+      ...updatedRecord,
+      leave_date: new Date(updatedRecord.leave_date),
+      created_at: updatedRecord.created_at,
+      updated_at: updatedRecord.updated_at
+    };
+  } catch (error) {
+    console.error('Employee leave request update failed:', error);
+    throw error;
+  }
+};
